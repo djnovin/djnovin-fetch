@@ -1,14 +1,21 @@
 {
-  "name": "novin-fetch",
+  "name": "djnovin-fetch",
   "version": "0.1.0-alpha.1",
-  "description": "",
+  "description": "A flexible and configurable Fetch API wrapper with built-in retry mechanisms, customizable request configuration, and support for various response types. Ideal for managing HTTP requests in JavaScript and TypeScript projects.",
   "main": "dist/index.d.ts",
   "types": "dist/index.d.ts",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "tsc"
   },
-  "keywords": [],
-  "author": "Novin Noori",
+  "keywords": [
+    "api",
+    "fetch",
+    "http",
+    "typescript",
+    "javascript",
+    "wrapper"
+  ],
+  "author": "djnovin",
   "license": "MIT"
 }
