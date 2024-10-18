@@ -1,11 +1,15 @@
+// src/index.ts
+
+type RequestInterceptor<T> = (config: RequestConfig<T>) => RequestConfig<T>;
+type ResponseInterceptor<R> = (response: R) => R;
+
 interface RequestConfig<T> {
   url: string;
   method: "GET" | "POST" | "PUT" | "DELETE";
   headers?: Record<string, string>;
   body?: T;
-
-  maxRetries?: number; // Max retry attempts
-  retryDelay?: number; // Delay between retries
+  maxRetries?: number;
+  retryDelay?: number;
   responseType: "json" | "text" | "blob";
 }
 
@@ -20,6 +24,32 @@ interface FetchBuilder<T> {
   setUrl(url: string): this;
 }
 
+class ConfigManager {
+  private static instance: ConfigManager;
+  private globalConfig: Partial<RequestConfig<any>> = {};
+
+  private constructor() {}
+
+  static getInstance(): ConfigManager {
+    if (!ConfigManager.instance) {
+      ConfigManager.instance = new ConfigManager();
+    }
+    return ConfigManager.instance;
+  }
+
+  setGlobalConfig(config: Partial<RequestConfig<any>>): void {
+    this.globalConfig = { ...this.globalConfig, ...config };
+  }
+
+  getGlobalConfig(): Partial<RequestConfig<any>> {
+    return this.globalConfig;
+  }
+
+  resetGlobalConfig() {
+    this.globalConfig = {};
+  }
+}
+
 class FetchBuilder<T> implements FetchBuilder<T> {
   private config: RequestConfig<T> = {
     url: "",
@@ -29,6 +59,31 @@ class FetchBuilder<T> implements FetchBuilder<T> {
     maxRetries: 3,
     retryDelay: 1000,
   };
+
+  private requestInterceptors: RequestInterceptor<T>[] = [];
+  private responseInterceptors: ResponseInterceptor<any>[] = [];
+
+  private getEffectiveConfig(): RequestConfig<T> {
+    const globalConfig = ConfigManager.getInstance().getGlobalConfig();
+    return {
+      ...globalConfig,
+      ...this.config,
+      headers: {
+        ...globalConfig?.headers,
+        ...this.config.headers,
+      } as RequestConfig<T>["headers"],
+    };
+  }
+
+  addRequestInterceptor(interceptor: RequestInterceptor<T>): this {
+    this.requestInterceptors.push(interceptor);
+    return this;
+  }
+
+  addResponseInterceptor<R>(interceptor: ResponseInterceptor<R>): this {
+    this.responseInterceptors.push(interceptor);
+    return this;
+  }
 
   setUrl(url: string): this {
     this.config.url = url;
@@ -50,15 +105,13 @@ class FetchBuilder<T> implements FetchBuilder<T> {
     return this;
   }
 
-  setMinRetries(minRetries: number): this {
-    return this;
-  }
-
   setMaxRetries(maxRetries: number): this {
+    this.config.maxRetries = maxRetries;
     return this;
   }
 
   setRetryDelay(retryDelay: number): this {
+    this.config.retryDelay = retryDelay;
     return this;
   }
 
@@ -80,14 +133,24 @@ class FetchBuilder<T> implements FetchBuilder<T> {
 
   async execute<R = any>(): Promise<[Error | null, R | null]> {
     let attempts = 0;
+    let config = this.getEffectiveConfig();
+
+    for (const interceptor of this.requestInterceptors) {
+      config = interceptor(config);
+    }
+
     const maxRetries = this.config.maxRetries || 0;
 
     while (attempts <= maxRetries) {
       try {
+        const controller = new AbortController();
+        const signal = controller.signal;
+
         const options: RequestInit = {
-          method: this.config.method,
-          headers: this.config.headers,
-          body: this.config.body ? JSON.stringify(this.config.body) : undefined,
+          method: config.method,
+          headers: config.headers,
+          body: config.body ? JSON.stringify(config.body) : undefined,
+          signal,
         };
 
         const response = await fetch(this.config.url, options);
@@ -96,14 +159,19 @@ class FetchBuilder<T> implements FetchBuilder<T> {
           throw new Error(`HTTP error: ${response.statusText}`);
         }
 
-        const parsedResponse = await this.parseResponse(response);
-        return [null, parsedResponse as R];
+        let parsedResponse = (await this.parseResponse(response)) as R;
+
+        for (const interceptor of this.responseInterceptors) {
+          parsedResponse = interceptor(parsedResponse);
+        }
+
+        return [null, parsedResponse];
       } catch (error) {
-        if (attempts >= maxRetries) {
-          return [error as Error, null]; // Max retries reached, return error
+        if (attempts >= maxRetries || (error as Error).name === "AbortError") {
+          return [error as Error, null];
         }
         attempts++;
-        await this.backoff(attempts); // Apply backoff before retrying
+        await this.backoff(attempts);
       }
     }
 
@@ -111,20 +179,4 @@ class FetchBuilder<T> implements FetchBuilder<T> {
   }
 }
 
-const fetchBuilder = new FetchBuilder<{ name: string }>();
-
-fetchBuilder
-  .setUrl("https://jsonplaceholder.typicode.com/posts")
-  .setMethod("POST")
-  .setHeaders({ "Content-Type": "application/json" })
-  .setBody({ name: "John Doe" })
-  .setMaxRetries(3)
-  .setRetryDelay(1000)
-  .execute<{ id: number; name: string }>()
-  .then(([error, response]) => {
-    if (error) {
-      console.error(error);
-    } else {
-      console.log(response);
-    }
-  });
+export { FetchBuilder, ConfigManager, RequestConfig };
