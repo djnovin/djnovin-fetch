@@ -6,6 +6,7 @@
   "types": "dist/index.d.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "ts-node src/index.ts",
     "build": "swc src --out-dir dist --source-maps"
   },
   "keywords": [
@@ -21,6 +22,7 @@
   "devDependencies": {
     "@swc/cli": "0.4.1-nightly.20240914",
     "@swc/core": "^1.7.36",
-    "husky": "^9.1.6"
+    "husky": "^9.1.6",
+    "ts-node": "^10.9.2"
   }
 }

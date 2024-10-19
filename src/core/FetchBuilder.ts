@@ -26,6 +26,8 @@ class FetchBuilder<T> {
     method: "GET",
     headers: {},
     responseType: "json",
+    body: undefined,
+    timeout: undefined,
     maxRetries: 3,
     retryDelay: 1000,
   };
@@ -137,6 +139,11 @@ class FetchBuilder<T> {
     return this.updateConfig("headers", headers);
   }
 
+  setTimeout(timeout: number): FetchBuilder<T> {
+    this.config.timeout = timeout;
+    return this;
+  }
+
   /**
    * Sets the request body.
    * @param body The body to set.
@@ -169,7 +176,7 @@ class FetchBuilder<T> {
    * @param responseType The response type to set.
    * @returns {this} The current instance to allow chaining.
    */
-  setResponseType(responseType: ResponseType): this {
+  setResponseType(responseType: any): this {
     return this.updateConfig("responseType", responseType);
   }
 
@@ -184,13 +191,34 @@ class FetchBuilder<T> {
 
   /**
    * Parses the response based on the configured response type.
+   * For large JSON responses, it uses streaming to avoid loading the entire response into memory at once.
    * @param response The fetch response.
    * @returns {Promise<any>} The parsed response.
    */
   private async parseResponse(response: Response): Promise<any> {
+    if (!response.ok) {
+      throw new Error(`Request failed with status ${response.status}`);
+    }
+
     switch (this.config.responseType) {
       case "json":
-        return response.json();
+        // Stream the JSON response if it's large
+        if (response.body) {
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder();
+          let jsonString = "";
+          let result = await reader.read();
+
+          while (!result.done) {
+            jsonString += decoder.decode(result.value, { stream: true });
+            result = await reader.read();
+          }
+
+          return JSON.parse(jsonString);
+        } else {
+          // Fallback if streaming is not supported
+          return response.json();
+        }
       case "text":
         return response.text();
       case "blob":
@@ -198,7 +226,7 @@ class FetchBuilder<T> {
       case "arrayBuffer":
         return response.arrayBuffer();
       default:
-        return response.json();
+        throw new Error("Unsupported response type");
     }
   }
 

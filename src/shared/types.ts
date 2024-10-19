@@ -25,6 +25,7 @@ export interface RequestConfig<T> {
   maxRetries?: number;
   method: HTTPMethods;
   responseType: ResponseType;
+  timeout?: number;
   retryDelay?: number;
   url: string;
 }
