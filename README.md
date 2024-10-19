@@ -1,3 +1,9 @@
+<h1 align="center">djnovin/fetcher</h1>
+
+<p align="center">
+  <p> A simple fetch wrapper with retry mechanism. </p>
+</p>
+
 ## Quickstart
 
 ```zsh

@@ -20,6 +20,7 @@
   "license": "MIT",
   "devDependencies": {
     "@swc/cli": "0.4.1-nightly.20240914",
-    "@swc/core": "^1.7.36"
+    "@swc/core": "^1.7.36",
+    "husky": "^9.1.6"
   }
 }
