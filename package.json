@@ -2,11 +2,11 @@
   "name": "djnovin-fetch",
   "version": "0.1.0-alpha.1",
   "description": "A flexible and configurable Fetch API wrapper with built-in retry mechanisms, customizable request configuration, and support for various response types. Ideal for managing HTTP requests in JavaScript and TypeScript projects.",
-  "main": "dist/index.d.ts",
-  "types": "dist/index.d.ts",
+  "main": "dist/index.js",
+  "types": "dist/index.d.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "swc src/index.ts --out-file dist/index.js --source-maps"
+    "build": "swc src --out-dir dist --source-maps"
   },
   "keywords": [
     "api",
@@ -19,6 +19,7 @@
   "author": "djnovin",
   "license": "MIT",
   "devDependencies": {
-    "swc": "^1.0.11"
+    "@swc/cli": "0.4.1-nightly.20240914",
+    "@swc/core": "^1.7.36"
   }
 }

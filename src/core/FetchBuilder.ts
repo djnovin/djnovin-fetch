@@ -6,16 +6,7 @@ import {
 import { ConfigManager } from "./ConfigManager";
 import { ErrorHandler } from "./ErrorHandler";
 
-export interface FetchBuilder<T> {
-  setBody(body: RequestConfig<T>["body"]): this;
-  setHeaders(headers: RequestConfig<T>["headers"]): this;
-  setMaxRetries(maxRetries: number): this;
-  setMethod(method: RequestConfig<T>["method"]): this;
-  setMinRetries(minRetries: number): this;
-  setResponseType(responseType: RequestConfig<T>["responseType"]): this;
-  setRetryDelay(retryDelay: number): this;
-  setUrl(url: string): this;
-}
+interface RequestInit {}
 
 /**
  * FetchBuilder is a class that helps to build and execute fetch requests.
@@ -29,7 +20,7 @@ export interface FetchBuilder<T> {
  *   .setHeaders({ "Content-Type": "application/json" })
  *   .execute();
  */
-class FetchBuilder<T> implements FetchBuilder<T> {
+class FetchBuilder<T> {
   private config: RequestConfig<T> = {
     url: "",
     method: "GET",
@@ -42,9 +33,27 @@ class FetchBuilder<T> implements FetchBuilder<T> {
   private requestInterceptors: RequestInterceptor<T>[] = [];
   private responseInterceptors: ResponseInterceptor<any>[] = [];
 
+  /**
+   * Prepares the request options for the fetch call.
+   * @param config The request configuration.
+   * @returns {RequestInit} The fetch options.
+   */
+  private getRequestOptions(config: RequestConfig<T>): RequestInit {
+    return {
+      method: config.method,
+      headers: config.headers,
+      body: this.getRequestBody(),
+      signal: new AbortController().signal,
+    };
+  }
+
+  /**
+   * Merges global and local configurations.
+   * @returns {RequestConfig<T>} The effective merged configuration.
+   */
   private getEffectiveConfig(): RequestConfig<T> {
     const globalConfig = ConfigManager.getInstance().getGlobalConfig();
-    return {
+    const mergedConfig = {
       ...globalConfig,
       ...this.config,
       headers: {
@@ -52,53 +61,132 @@ class FetchBuilder<T> implements FetchBuilder<T> {
         ...this.config.headers,
       } as RequestConfig<T>["headers"],
     };
+
+    if (
+      typeof mergedConfig.body === "object" &&
+      !(mergedConfig.body instanceof FormData) &&
+      !(mergedConfig.body instanceof Blob)
+    ) {
+      if (mergedConfig.headers) {
+        mergedConfig.headers["Content-Type"] =
+          mergedConfig.headers["Content-Type"] || "application/json";
+      }
+    }
+
+    return mergedConfig;
   }
 
+  /**
+   * Updates the configuration with the provided key-value pair.
+   * @param key The key of the configuration to update.
+   * @param value The value to set.
+   * @returns {this} The current instance to allow chaining.
+   */
+  private updateConfig<K extends keyof RequestConfig<T>>(
+    key: K,
+    value: RequestConfig<T>[K],
+  ): this {
+    this.config[key] = value;
+    return this;
+  }
+
+  /**
+   * Adds a response interceptor.
+   * @param interceptor The response interceptor to add.
+   * @returns {this} The current instance to allow chaining.
+   */
   addRequestInterceptor(interceptor: RequestInterceptor<T>): this {
     this.requestInterceptors.push(interceptor);
     return this;
   }
 
+  /**
+   * Adds a response interceptor.
+   * @param interceptor The response interceptor to add.
+   * @returns {this} The current instance to allow chaining.
+   */
   addResponseInterceptor<R>(interceptor: ResponseInterceptor<R>): this {
     this.responseInterceptors.push(interceptor);
     return this;
   }
 
+  /**
+   * Sets the request URL.
+   * @param url The URL to set.
+   * @returns {this} The current instance to allow chaining.
+   */
   setUrl(url: string): this {
-    this.config.url = url;
-    return this;
+    return this.updateConfig("url", url);
   }
 
+  /**
+   * Sets the request method.
+   * @param method The HTTP method to set.
+   * @returns {this} The current instance to allow chaining.
+   */
   setMethod(method: RequestConfig<T>["method"]): this {
-    this.config.method = method;
-    return this;
+    return this.updateConfig("method", method);
   }
 
+  /**
+   * Sets the request headers.
+   * @param headers The headers to set.
+   * @returns {this} The current instance to allow chaining.
+   */
   setHeaders(headers: RequestConfig<T>["headers"]): this {
-    this.config.headers = headers;
-    return this;
+    return this.updateConfig("headers", headers);
   }
 
+  /**
+   * Sets the request body.
+   * @param body The body to set.
+   * @returns {this} The current instance to allow chaining.
+   */
   setBody(body: RequestConfig<T>["body"]): this {
-    this.config.body = body;
-    return this;
+    return this.updateConfig("body", body);
   }
 
+  /**
+   * Sets the maximum number of retries for the request.
+   * @param maxRetries The maximum number of retries.
+   * @returns {this} The current instance to allow chaining.
+   */
   setMaxRetries(maxRetries: number): this {
-    this.config.maxRetries = maxRetries;
-    return this;
+    return this.updateConfig("maxRetries", maxRetries);
   }
 
+  /**
+   * Sets the delay between retries.
+   * @param retryDelay The delay in milliseconds.
+   * @returns {this} The current instance to allow chaining.
+   */
   setRetryDelay(retryDelay: number): this {
-    this.config.retryDelay = retryDelay;
-    return this;
+    return this.updateConfig("retryDelay", retryDelay);
   }
 
+  /**
+   * Sets the response type.
+   * @param responseType The response type to set.
+   * @returns {this} The current instance to allow chaining.
+   */
+  setResponseType(responseType: ResponseType): this {
+    return this.updateConfig("responseType", responseType);
+  }
+
+  /**
+   * Implements exponential backoff for retries.
+   * @param retryCount The current retry count.
+   */
   private async backoff(retryCount: number): Promise<void> {
     const delay = (this.config.retryDelay || 1000) * Math.pow(2, retryCount);
     return new Promise((resolve) => setTimeout(resolve, delay));
   }
 
+  /**
+   * Parses the response based on the configured response type.
+   * @param response The fetch response.
+   * @returns {Promise<any>} The parsed response.
+   */
   private async parseResponse(response: Response): Promise<any> {
     switch (this.config.responseType) {
       case "json":
@@ -109,9 +197,36 @@ class FetchBuilder<T> implements FetchBuilder<T> {
         return response.blob();
       case "arrayBuffer":
         return response.arrayBuffer();
+      default:
+        return response.json();
     }
   }
 
+  /**
+   * Returns the appropriate request body based on the configuration.
+   * @returns {BodyInit | null} The request body.
+   */
+  private getRequestBody(): BodyInit | null {
+    const { body } = this.config;
+
+    if (!body) {
+      return null;
+    }
+
+    if (
+      body instanceof FormData ||
+      body instanceof Blob ||
+      typeof body === "string"
+    ) {
+      return body;
+    }
+    return JSON.stringify(body);
+  }
+
+  /**
+   * Executes the request with retry logic.
+   * @returns {Promise<[Error | null, R | null]>} The result of the request.
+   */
   async execute<R = any>(): Promise<[Error | null, R | null]> {
     let attempts = 0;
     let config = this.getEffectiveConfig();
@@ -126,17 +241,11 @@ class FetchBuilder<T> implements FetchBuilder<T> {
         const controller = new AbortController();
         const signal = controller.signal;
 
-        const options: RequestInit = {
-          method: config.method,
-          headers: config.headers,
-          body: config.body ? JSON.stringify(config.body) : undefined,
-          signal,
-        };
-
+        const options = this.getRequestOptions(config);
         const response = await fetch(config.url, options);
 
         if (!response.ok) {
-          throw new Error(`HTTP error: ${response.statusText}`);
+          throw ErrorHandler.createError(response);
         }
 
         let parsedResponse = (await this.parseResponse(response)) as R;
@@ -161,3 +270,5 @@ class FetchBuilder<T> implements FetchBuilder<T> {
     return [new Error("Unknown error"), null];
   }
 }
+
+export { FetchBuilder };

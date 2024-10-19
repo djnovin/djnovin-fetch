@@ -20,10 +20,10 @@ export type ResponseType =
   | "text";
 
 export interface RequestConfig<T> {
-  body?: T;
+  body?: T | FormData | Blob | ArrayBuffer | string;
   headers?: Record<string, string>;
   maxRetries?: number;
-  method: HTTPMethods;
+  method: "DELETE" | "GET" | "HEAD" | "OPTIONS" | "PATCH" | "POST" | "PUT";
   responseType: ResponseType;
   retryDelay?: number;
   url: string;
