@@ -23,7 +23,7 @@ export interface RequestConfig<T> {
   body?: T | FormData | Blob | ArrayBuffer | string;
   headers?: Record<string, string>;
   maxRetries?: number;
-  method: "DELETE" | "GET" | "HEAD" | "OPTIONS" | "PATCH" | "POST" | "PUT";
+  method: HTTPMethods;
   responseType: ResponseType;
   retryDelay?: number;
   url: string;
