@@ -1,7 +1,7 @@
 export class RetryManager {
   constructor(
-    private maxRetries: number,
-    private retryDelay: number,
+    private readonly maxRetries: number,
+    private readonly retryDelay: number
   ) {}
 
   /**
@@ -17,7 +17,7 @@ export class RetryManager {
         await this.backoff(++attempts);
       }
     }
-    throw new Error("Max retries exceeded");
+    throw new Error('Max retries exceeded');
   }
 
   private async backoff(retryCount: number): Promise<void> {
